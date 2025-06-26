@@ -8,7 +8,8 @@ class JanusModelLoader:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "model_name": (["deepseek-ai/Janus-Pro-1B", "deepseek-ai/Janus-Pro-7B"],),
+                "model_name": (["Janus-Pro-1B","Janus-Pro-7B","Janus-4o-7B"], {"default": "Janus-4o-7B"}),
+                "quantization": (["none", "4-bit", "4-bit-double"], {"default": "none"}),
             },
         }
     
@@ -17,7 +18,7 @@ class JanusModelLoader:
     FUNCTION = "load_model"
     CATEGORY = "Janus-Pro"
 
-    def load_model(self, model_name):
+    def load_model(self, model_name, quantization):
         try:
             from janus.models import MultiModalityCausalLM, VLChatProcessor
             from transformers import AutoModelForCausalLM
@@ -25,6 +26,33 @@ class JanusModelLoader:
         except ImportError:
             raise ImportError("Please install Janus using 'pip install -r requirements.txt'")
 
+                # Configure quantization (4-bit only)
+        quantization_config = None
+        if quantization != "none":
+            if quantization == "4-bit":
+                quantization_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_use_double_quant=False,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_compute_dtype=torch.bfloat16
+                )
+            elif quantization == "4-bit-double":
+                quantization_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_compute_dtype=torch.bfloat16
+                )
+        
+        # Load model with quantization config
+        if quantization_config:
+            vl_gpt = AutoModelForCausalLM.from_pretrained(
+                model_dir,
+                trust_remote_code=True,
+                quantization_config=quantization_config,
+                device_map="auto"
+            )
+        else:
         device = "cuda" if torch.cuda.is_available() else "cpu"
         
         try:
